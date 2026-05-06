@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="en" data-theme="paper" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listen Labs / Grid Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --content-primary:    #120F08;
+    --content-secondary:  #6B6861;
+    --content-brand:      #0021CC;
+    --surface-primary:    #F9F4EB;
+    --surface-secondary:  #EEE8DD;
+    --surface-brand:      #0021CC;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    --radius-2: 2px;
+    --radius-4: 4px;
+    --radius-8: 8px;
+
+    --hair: rgba(18, 15, 8, 0.12);
+    --hair-strong: rgba(18, 15, 8, 0.24);
+
+    --canvas-bg: var(--surface-primary);
+    --tile: var(--surface-brand);
+    --tile-on-brand: #F9F4EB;
+  }
+
+  [data-theme="paper"][data-mode="dark"] {
+    --content-primary:   #F9F4EB;
+    --content-secondary: #B6B0A4;
+    --content-brand:     #3354FF;
+    --surface-primary:   #130F06;
+    --surface-secondary: #080603;
+    --surface-brand:     #3354FF;
+    --hair:        rgba(249, 244, 235, 0.14);
+    --hair-strong: rgba(249, 244, 235, 0.28);
+  }
+
+  [data-theme="whisp"][data-mode="light"] {
+    --content-primary:   #1A1A1A;
+    --content-secondary: #666666;
+    --content-brand:     #0021CC;
+    --surface-primary:   #FAFAFA;
+    --surface-secondary: #FFFFFF;
+    --surface-brand:     #0021CC;
+    --hair:        rgba(26, 26, 26, 0.10);
+    --hair-strong: rgba(26, 26, 26, 0.22);
+  }
+
+  [data-theme="whisp"][data-mode="dark"] {
+    --content-primary:   #E5E5E5;
+    --content-secondary: #888888;
+    --content-brand:     #3354FF;
+    --surface-primary:   #1A1A1A;
+    --surface-secondary: #000000;
+    --surface-brand:     #3354FF;
+    --hair:        rgba(229, 229, 229, 0.14);
+    --hair-strong: rgba(229, 229, 229, 0.28);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--surface-primary);
+    color: var(--content-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: normal;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-6) var(--space-10) var(--space-12);
+    gap: var(--space-8);
+  }
+
+  .header {
+    font-size: 12px;
+    text-align: center;
+    width: 100%;
+    margin-top: var(--space-2);
+  }
+  .header .lab   { color: var(--content-secondary); }
+  .header .title { color: var(--content-primary); }
+
+  .stage {
+    width: 800px;
+    height: 800px;
+    background: var(--canvas-bg);
+  }
+  canvas { display: block; }
+
+  .controls {
+    width: 800px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--space-8);
+    row-gap: var(--space-6);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--hair);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .group .label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--content-secondary);
+  }
+  .group .value {
+    color: var(--content-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Slider — minimal: 1px track, 12px square brand thumb */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 24px;
+    background: transparent;
+    margin: 0;
+    padding: 0;
+  }
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 1px;
+    background: var(--hair-strong);
+    border: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--surface-brand);
+    border: 0;
+    border-radius: 2px;
+    margin-top: -6px;
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 1px;
+    background: var(--hair-strong);
+    border: none;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--surface-brand);
+    border: 0;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  /* Segmented control — flush row of buttons */
+  .segmented {
+    display: flex;
+    height: 24px;
+    border: 1px solid var(--hair-strong);
+    border-radius: 2px;
+    overflow: hidden;
+    background: transparent;
+  }
+  .segmented button {
+    flex: 1 1 0;
+    min-width: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--hair-strong);
+    color: var(--content-secondary);
+    font: 400 12px 'Inter', system-ui, sans-serif;
+    letter-spacing: normal;
+    cursor: pointer;
+    padding: 0 var(--space-2);
+    height: 100%;
+    line-height: 22px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .segmented button:first-child { border-left: 0; }
+  .segmented button[aria-pressed="true"] {
+    background: var(--surface-brand);
+    color: var(--tile-on-brand);
+  }
+  .segmented button:focus-visible {
+    outline: 1px solid var(--content-brand);
+    outline-offset: -2px;
+  }
+
+  /* Native select — brand-clean */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--surface-primary);
+    color: var(--content-primary);
+    font: 400 12px 'Inter', system-ui, sans-serif;
+    height: 24px;
+    padding: 0 var(--space-6) 0 var(--space-3);
+    border: 1px solid var(--hair-strong);
+    border-radius: 2px;
+    cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--content-secondary) 50%),
+      linear-gradient(135deg, var(--content-secondary) 50%, transparent 50%);
+    background-position:
+      calc(100% - 12px) 11px,
+      calc(100% - 8px) 11px;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+    /* gradients above are flat triangles (no soft gradient), serving as a chevron */
+  }
+  select:focus { outline: 1px solid var(--content-brand); outline-offset: -2px; }
+
+  .actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--hair);
+  }
+  .actions .spacer { flex: 1; }
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 12px;
+    color: var(--content-secondary);
+    cursor: pointer;
+    user-select: none;
+    height: 24px;
+  }
+  .toggle input { display: none; }
+  .toggle .box {
+    width: 16px; height: 16px;
+    border: 1px solid var(--hair-strong);
+    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .toggle input:checked + .box {
+    background: var(--surface-brand);
+    border-color: var(--surface-brand);
+  }
+  .toggle input:checked + .box::after {
+    content: "";
+    width: 8px; height: 8px;
+    background: var(--tile-on-brand);
+    border-radius: 1px;
+  }
+  button.action {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--content-primary);
+    color: var(--content-primary);
+    font: 400 12px 'Inter', system-ui, sans-serif;
+    height: 24px;
+    padding: 0 var(--space-3);
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: normal;
+  }
+  button.action:hover {
+    background: var(--content-primary);
+    color: var(--surface-primary);
+  }
+  button.action:focus-visible {
+    outline: 1px solid var(--content-brand);
+    outline-offset: 2px;
+  }
+
+  .footer {
+    font-size: 10px;
+    color: var(--content-secondary);
+    text-align: center;
+    padding-top: var(--space-2);
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <span class="lab">Listen Labs /</span> <span class="title">Grid Playground</span>
+    </div>
+
+    <div class="stage">
+      <canvas id="canvas" width="800" height="800" aria-label="Grid canvas"></canvas>
+    </div>
+
+    <div class="controls" id="controls">
+      <!-- Column 1: geometry + fill -->
+      <div class="group">
+        <div class="label-row"><span>Tiles per side</span><span class="value" data-readout="tiles">12</span></div>
+        <input type="range" id="tiles" min="2" max="32" step="1" value="12">
+      </div>
+      <div class="group">
+        <div class="label-row"><span>Animation mode</span><span class="value" data-readout="mode">Wave horizontal</span></div>
+        <select id="mode">
+          <option value="off">Off (manual)</option>
+          <option value="wave-h" selected>Wave horizontal</option>
+          <option value="wave-v">Wave vertical</option>
+          <option value="ripple">Ripple from center</option>
+          <option value="diagonal">Diagonal sweep</option>
+          <option value="sequential">Sequential chase</option>
+          <option value="snake">Snake (boustrophedon)</option>
+          <option value="checker">Checker pulse</option>
+          <option value="shimmer">Shimmer (noise)</option>
+          <option value="pendulum">Pendulum</option>
+          <option value="spiral">Spiral</option>
+          <option value="breathing">Breathing (unison)</option>
+          <option value="columns">Columns cycle</option>
+          <option value="rows">Rows cycle</option>
+          <option value="cross">Cross (H + V)</option>
+        </select>
+      </div>
+
+      <div class="group">
+        <div class="label-row"><span>Fill (base)</span><span class="value"><span data-readout="fill">60</span>%</span></div>
+        <input type="range" id="fill" min="0" max="100" step="1" value="60">
+      </div>
+      <div class="group">
+        <div class="label-row"><span>Animation amplitude</span><span class="value"><span data-readout="amp">50</span>%</span></div>
+        <input type="range" id="amp" min="0" max="100" step="1" value="50">
+      </div>
+
+      <div class="group">
+        <div class="label-row"><span>Fill direction</span><span class="value" data-readout="direction">Horizontal</span></div>
+        <div class="segmented" id="direction" role="radiogroup" aria-label="Fill direction">
+          <button type="button" data-value="horizontal" aria-pressed="true">Horizontal</button>
+          <button type="button" data-value="vertical"   aria-pressed="false">Vertical</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="label-row"><span>Animation speed</span><span class="value"><span data-readout="speed">1.00</span>&times;</span></div>
+        <input type="range" id="speed" min="0" max="300" step="1" value="100">
+      </div>
+
+      <div class="group">
+        <div class="label-row"><span>Direction mix</span><span class="value" data-readout="directionMix">Uniform</span></div>
+        <div class="segmented" id="directionMix" role="radiogroup" aria-label="Direction mix">
+          <button type="button" data-value="uniform" aria-pressed="true">Uniform</button>
+          <button type="button" data-value="alt-row" aria-pressed="false">Alt rows</button>
+          <button type="button" data-value="alt-col" aria-pressed="false">Alt cols</button>
+          <button type="button" data-value="cycle"   aria-pressed="false">Cycle</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="label-row"><span>Wave frequency</span><span class="value"><span data-readout="freq">1.00</span>&times;</span></div>
+        <input type="range" id="freq" min="25" max="500" step="1" value="100">
+      </div>
+
+      <div class="group">
+        <div class="label-row"><span>Fill alignment</span><span class="value" data-readout="alignment">Start</span></div>
+        <div class="segmented" id="alignment" role="radiogroup" aria-label="Fill alignment">
+          <button type="button" data-value="start"  aria-pressed="true">Start</button>
+          <button type="button" data-value="center" aria-pressed="false">Center</button>
+          <button type="button" data-value="end"    aria-pressed="false">End</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="label-row"><span>Theme</span><span class="value" data-readout="theme">Paper</span></div>
+        <div class="segmented" id="theme" role="radiogroup" aria-label="Theme">
+          <button type="button" data-value="paper" aria-pressed="true">Paper</button>
+          <button type="button" data-value="whisp" aria-pressed="false">Whisp</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="label-row"><span>Alignment mix</span><span class="value" data-readout="alignmentMix">Uniform</span></div>
+        <div class="segmented" id="alignmentMix" role="radiogroup" aria-label="Alignment mix">
+          <button type="button" data-value="uniform" aria-pressed="true">Uniform</button>
+          <button type="button" data-value="alt-row" aria-pressed="false">Alt rows</button>
+          <button type="button" data-value="alt-col" aria-pressed="false">Alt cols</button>
+          <button type="button" data-value="cycle"   aria-pressed="false">Cycle</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="label-row"><span>Mode</span><span class="value" data-readout="modeLD">Light</span></div>
+        <div class="segmented" id="ld" role="radiogroup" aria-label="Light or dark mode">
+          <button type="button" data-value="light" aria-pressed="true">Light</button>
+          <button type="button" data-value="dark"  aria-pressed="false">Dark</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <label class="toggle">
+          <input type="checkbox" id="showGrid">
+          <span class="box"></span>
+          Show grid frame
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="showCells">
+          <span class="box"></span>
+          Show cell guides
+        </label>
+        <span class="spacer"></span>
+        <button class="action" type="button" id="pause">Pause</button>
+        <button class="action" type="button" id="reset">Reset</button>
+      </div>
+    </div>
+
+    <div class="footer">Inter Regular · 4px grid · brand #0021CC</div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  canvas.width = 800 * DPR;
+  canvas.height = 800 * DPR;
+  canvas.style.width = '800px';
+  canvas.style.height = '800px';
+  ctx.scale(DPR, DPR);
+
+  const DEFAULTS = Object.freeze({
+    tiles: 12,
+    fill: 60,
+    amp: 50,
+    speed: 100,        // 100 = 1.00x
+    freq: 100,         // 100 = 1.00x
+    mode: 'wave-h',
+    direction: 'horizontal',
+    directionMix: 'uniform',
+    alignment: 'start',
+    alignmentMix: 'uniform',
+    theme: 'paper',
+    ld: 'light',
+    showGrid: false,
+    showCells: false,
+    paused: false,
+  });
+  const state = { ...DEFAULTS };
+
+  const MODE_LABELS = {
+    'off': 'Off (manual)',
+    'wave-h': 'Wave horizontal',
+    'wave-v': 'Wave vertical',
+    'ripple': 'Ripple from center',
+    'diagonal': 'Diagonal sweep',
+    'sequential': 'Sequential chase',
+    'snake': 'Snake',
+    'checker': 'Checker pulse',
+    'shimmer': 'Shimmer',
+    'pendulum': 'Pendulum',
+    'spiral': 'Spiral',
+    'breathing': 'Breathing',
+    'columns': 'Columns cycle',
+    'rows': 'Rows cycle',
+    'cross': 'Cross',
+  };
+  const DIRECTION_LABELS  = { horizontal: 'Horizontal', vertical: 'Vertical' };
+  const ALIGNMENT_LABELS  = { start: 'Start', center: 'Center', end: 'End' };
+  const MIX_LABELS        = { uniform: 'Uniform', 'alt-row': 'Alt rows', 'alt-col': 'Alt cols', cycle: 'Cycle' };
+  const THEME_LABELS      = { paper: 'Paper', whisp: 'Whisp' };
+  const LD_LABELS         = { light: 'Light', dark: 'Dark' };
+
+  // Animation clock — accumulates only while not paused.
+  let elapsed = 0;
+  let lastFrame = performance.now();
+
+  // ---------- helpers ----------
+  function getCss(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function setReadout(key, text) {
+    const els = document.querySelectorAll(`[data-readout="${key}"]`);
+    els.forEach(el => { el.textContent = text; });
+  }
+
+  function setSegmentedValue(id, value) {
+    const root = document.getElementById(id);
+    root.querySelectorAll('button').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.value === value));
+    });
+  }
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.dataset.mode = state.ld;
+  }
+
+  // ---------- modulation per tile ----------
+  // Returns a value in [0, 1] for the displayed fill of (col, row).
+  function computeFill(col, row, n, t) {
+    const TAU = Math.PI * 2;
+    const f = state.freq / 100;
+    const cx = (n - 1) / 2;
+    const cy = (n - 1) / 2;
+    const u = n > 1 ? col / (n - 1) : 0;
+    const v = n > 1 ? row / (n - 1) : 0;
+    let m = 0; // -1..1
+
+    switch (state.mode) {
+      case 'off': m = 0; break;
+
+      case 'wave-h':
+        m = Math.sin(TAU * (u * f - t));
+        break;
+
+      case 'wave-v':
+        m = Math.sin(TAU * (v * f - t));
+        break;
+
+      case 'ripple': {
+        const norm = Math.hypot(cx, cy) || 1;
+        const d = Math.hypot(col - cx, row - cy) / norm;
+        m = Math.sin(TAU * (d * f - t));
+        break;
+      }
+
+      case 'diagonal':
+        m = Math.sin(TAU * ((u + v) * 0.5 * f - t));
+        break;
+
+      case 'sequential': {
+        const idx = (row * n + col) / Math.max(1, n * n - 1);
+        m = Math.sin(TAU * (idx * f - t));
+        break;
+      }
+
+      case 'snake': {
+        const sCol = (row % 2 === 0) ? col : (n - 1 - col);
+        const idx = (row * n + sCol) / Math.max(1, n * n - 1);
+        m = Math.sin(TAU * (idx * f - t));
+        break;
+      }
+
+      case 'checker': {
+        const sign = ((col + row) % 2 === 0) ? 1 : -1;
+        m = sign * Math.sin(TAU * t * f);
+        break;
+      }
+
+      case 'shimmer': {
+        // Smooth pseudo-random phase per cell
+        const seed = Math.sin(col * 12.9898 + row * 78.233) * 43758.5453;
+        const phase = seed - Math.floor(seed);
+        m = Math.sin(TAU * (t * f + phase));
+        break;
+      }
+
+      case 'pendulum':
+        m = Math.sin(TAU * u * f) * Math.sin(TAU * t);
+        break;
+
+      case 'spiral': {
+        const dx = col - cx;
+        const dy = row - cy;
+        const norm = Math.hypot(cx, cy) || 1;
+        const angle = Math.atan2(dy, dx) / TAU;     // -0.5..0.5
+        const dist = Math.hypot(dx, dy) / norm;     // 0..1
+        m = Math.sin(TAU * (angle + dist * f - t));
+        break;
+      }
+
+      case 'breathing':
+        m = Math.sin(TAU * t * f);
+        break;
+
+      case 'columns': {
+        const idx = n > 1 ? col / (n - 1) : 0;
+        m = Math.sin(TAU * (idx * f - t));
+        break;
+      }
+
+      case 'rows': {
+        const idx = n > 1 ? row / (n - 1) : 0;
+        m = Math.sin(TAU * (idx * f - t));
+        break;
+      }
+
+      case 'cross':
+        m = (Math.sin(TAU * (u * f - t)) + Math.sin(TAU * (v * f - t))) / 2;
+        break;
+    }
+
+    const base = state.fill / 100;
+    const amp  = state.amp / 100;
+    const fill = base + amp * m;
+    return fill < 0 ? 0 : (fill > 1 ? 1 : fill);
+  }
+
+  function getDirection(col, row, t) {
+    const base = state.direction;
+    const flip = (d) => d === 'horizontal' ? 'vertical' : 'horizontal';
+    switch (state.directionMix) {
+      case 'uniform': return base;
+      case 'alt-row': return (row % 2 === 0) ? base : flip(base);
+      case 'alt-col': return (col % 2 === 0) ? base : flip(base);
+      case 'cycle':   return (Math.floor(t * 1) % 2 === 0) ? base : flip(base);
+    }
+    return base;
+  }
+
+  function getAlignment(col, row, t) {
+    const order = ['start', 'center', 'end'];
+    const baseIdx = order.indexOf(state.alignment);
+    switch (state.alignmentMix) {
+      case 'uniform': return state.alignment;
+      case 'alt-row': return order[(baseIdx + (row % 2)) % 3];
+      case 'alt-col': return order[(baseIdx + (col % 2)) % 3];
+      case 'cycle':   return order[(baseIdx + Math.floor(t * 1)) % 3];
+    }
+    return state.alignment;
+  }
+
+  // ---------- draw ----------
+  function draw() {
+    const W = 800, H = 800;
+    const surface = getCss('--canvas-bg') || getCss('--surface-primary');
+    const tileColor = getCss('--surface-brand');
+    const hairColor = getCss('--content-secondary');
+
+    ctx.fillStyle = surface;
+    ctx.fillRect(0, 0, W, H);
+
+    const gx = 100, gy = 100, gw = 600, gh = 600;
+    const n = state.tiles;
+    const tile = gw / n;
+    const gap = n >= 24 ? 1 : (n >= 12 ? 1 : 2);
+    const inner = Math.max(0, tile - gap);
+
+    // Optional cell guides — extremely faint, never decorative
+    if (state.showCells) {
+      ctx.save();
+      ctx.globalAlpha = 0.10;
+      ctx.strokeStyle = hairColor;
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= n; i++) {
+        const x = Math.round(gx + i * tile) + 0.5;
+        const y = Math.round(gy + i * tile) + 0.5;
+        ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x, gy + gh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + gw, y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Optional 1px frame around the 600x600 area
+    if (state.showGrid) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = hairColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
+      ctx.restore();
+    }
+
+    // Tiles
+    ctx.fillStyle = tileColor;
+    const t = elapsed;
+    for (let row = 0; row < n; row++) {
+      for (let col = 0; col < n; col++) {
+        const fillPct = computeFill(col, row, n, t);
+        if (fillPct <= 0.0005) continue;
+        const dir = getDirection(col, row, t);
+        const align = getAlignment(col, row, t);
+        const x0 = gx + col * tile;
+        const y0 = gy + row * tile;
+
+        let fx = x0, fy = y0, fw, fh;
+        if (dir === 'horizontal') {
+          fw = inner * fillPct;
+          fh = inner;
+          if (align === 'center')   fx = x0 + (inner - fw) / 2;
+          else if (align === 'end') fx = x0 + (inner - fw);
+        } else {
+          fw = inner;
+          fh = inner * fillPct;
+          if (align === 'center')   fy = y0 + (inner - fh) / 2;
+          else if (align === 'end') fy = y0 + (inner - fh);
+        }
+        // Snap to crisp pixel edges; avoid sub-pixel haze.
+        ctx.fillRect(Math.round(fx), Math.round(fy), Math.max(1, Math.round(fw)), Math.max(1, Math.round(fh)));
+      }
+    }
+  }
+
+  // ---------- frame loop ----------
+  function frame(now) {
+    const dt = (now - lastFrame) / 1000;
+    lastFrame = now;
+    if (!state.paused) {
+      elapsed += dt * (state.speed / 100);
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame((t) => { lastFrame = t; frame(t); });
+
+  // ---------- wiring ----------
+  function bindRange(id, key, transform = v => v, label = v => v) {
+    const el = document.getElementById(id);
+    el.value = String(state[key]);
+    setReadout(id, label(transform(Number(el.value))));
+    el.addEventListener('input', () => {
+      state[key] = Number(el.value);
+      setReadout(id, label(transform(Number(el.value))));
+    });
+  }
+
+  function bindSegmented(id, key, labels) {
+    const root = document.getElementById(id);
+    setSegmentedValue(id, state[key]);
+    setReadout(id, labels[state[key]]);
+    root.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-value]');
+      if (!btn) return;
+      const v = btn.dataset.value;
+      state[key] = v;
+      setSegmentedValue(id, v);
+      setReadout(id, labels[v]);
+      if (id === 'theme' || id === 'ld') applyTheme();
+    });
+  }
+
+  function bindToggle(id, key) {
+    const el = document.getElementById(id);
+    el.checked = !!state[key];
+    el.addEventListener('change', () => { state[key] = el.checked; });
+  }
+
+  // Sliders
+  bindRange('tiles', 'tiles', v => v, v => String(v));
+  bindRange('fill',  'fill',  v => v, v => String(v));
+  bindRange('amp',   'amp',   v => v, v => String(v));
+  bindRange('speed', 'speed', v => v / 100, v => v.toFixed(2));
+  bindRange('freq',  'freq',  v => v / 100, v => v.toFixed(2));
+
+  // Select (animation mode)
+  const modeSel = document.getElementById('mode');
+  modeSel.value = state.mode;
+  setReadout('mode', MODE_LABELS[state.mode]);
+  modeSel.addEventListener('change', () => {
+    state.mode = modeSel.value;
+    setReadout('mode', MODE_LABELS[state.mode]);
+  });
+
+  // Segmented controls
+  bindSegmented('direction',    'direction',    DIRECTION_LABELS);
+  bindSegmented('directionMix', 'directionMix', MIX_LABELS);
+  bindSegmented('alignment',    'alignment',    ALIGNMENT_LABELS);
+  bindSegmented('alignmentMix', 'alignmentMix', MIX_LABELS);
+  bindSegmented('theme',        'theme',        THEME_LABELS);
+  bindSegmented('ld',           'ld',           LD_LABELS);
+
+  // Toggles
+  bindToggle('showGrid',  'showGrid');
+  bindToggle('showCells', 'showCells');
+
+  // Pause / Reset
+  const pauseBtn = document.getElementById('pause');
+  pauseBtn.addEventListener('click', () => {
+    state.paused = !state.paused;
+    pauseBtn.textContent = state.paused ? 'Play' : 'Pause';
+  });
+
+  const resetBtn = document.getElementById('reset');
+  resetBtn.addEventListener('click', () => {
+    Object.assign(state, DEFAULTS);
+    elapsed = 0;
+    pauseBtn.textContent = 'Pause';
+
+    // Reflect into UI
+    document.getElementById('tiles').value = DEFAULTS.tiles; setReadout('tiles', String(DEFAULTS.tiles));
+    document.getElementById('fill').value  = DEFAULTS.fill;  setReadout('fill',  String(DEFAULTS.fill));
+    document.getElementById('amp').value   = DEFAULTS.amp;   setReadout('amp',   String(DEFAULTS.amp));
+    document.getElementById('speed').value = DEFAULTS.speed; setReadout('speed', (DEFAULTS.speed / 100).toFixed(2));
+    document.getElementById('freq').value  = DEFAULTS.freq;  setReadout('freq',  (DEFAULTS.freq / 100).toFixed(2));
+    modeSel.value = DEFAULTS.mode; setReadout('mode', MODE_LABELS[DEFAULTS.mode]);
+
+    setSegmentedValue('direction',    DEFAULTS.direction);    setReadout('direction',    DIRECTION_LABELS[DEFAULTS.direction]);
+    setSegmentedValue('directionMix', DEFAULTS.directionMix); setReadout('directionMix', MIX_LABELS[DEFAULTS.directionMix]);
+    setSegmentedValue('alignment',    DEFAULTS.alignment);    setReadout('alignment',    ALIGNMENT_LABELS[DEFAULTS.alignment]);
+    setSegmentedValue('alignmentMix', DEFAULTS.alignmentMix); setReadout('alignmentMix', MIX_LABELS[DEFAULTS.alignmentMix]);
+    setSegmentedValue('theme',        DEFAULTS.theme);        setReadout('theme',        THEME_LABELS[DEFAULTS.theme]);
+    setSegmentedValue('ld',           DEFAULTS.ld);           setReadout('ld',           LD_LABELS[DEFAULTS.ld]);
+
+    document.getElementById('showGrid').checked  = DEFAULTS.showGrid;
+    document.getElementById('showCells').checked = DEFAULTS.showCells;
+
+    applyTheme();
+  });
+
+  // Spacebar = pause/play
+  document.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      pauseBtn.click();
+    }
+  });
+
+  applyTheme();
+})();
+</script>
+</body>
+</html>

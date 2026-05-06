@@ -511,6 +511,28 @@
           </div>
         </div>
 
+        <div class="group">
+          <div class="label-row"><span>Shape</span><span class="value" data-readout="shape">Square</span></div>
+          <div class="segmented" id="shape" role="radiogroup" aria-label="Tile shape">
+            <button type="button" data-value="square" aria-pressed="true">Square</button>
+            <button type="button" data-value="circle" aria-pressed="false">Circle</button>
+          </div>
+        </div>
+
+        <div class="section-label">Color</div>
+
+        <div class="group">
+          <div class="label-row"><span>Palette</span><span class="value" data-readout="palette">Brand (mono)</span></div>
+          <select id="palette">
+            <option value="brand" selected>Brand (mono)</option>
+            <option value="brand-depth">Brand depth</option>
+            <option value="emotion">Emotion</option>
+            <option value="categorical">Categorical (Okabe-Ito)</option>
+            <option value="duotone">Duotone</option>
+            <option value="spectrum">Spectrum</option>
+          </select>
+        </div>
+
         <div class="section-label">Animation</div>
 
         <div class="group">
@@ -616,6 +638,8 @@
     directionMix: 'uniform',
     alignment: 'start',
     alignmentMix: 'uniform',
+    shape: 'square',
+    palette: 'brand',
     theme: 'paper',
     ld: 'light',
     showGrid: false,
@@ -644,8 +668,29 @@
   const DIRECTION_LABELS  = { horizontal: 'Horizontal', vertical: 'Vertical' };
   const ALIGNMENT_LABELS  = { start: 'Start', center: 'Center', end: 'End' };
   const MIX_LABELS        = { uniform: 'Uniform', 'alt-row': 'Alt rows', 'alt-col': 'Alt cols', cycle: 'Cycle' };
+  const SHAPE_LABELS      = { square: 'Square', circle: 'Circle' };
+  const PALETTE_LABELS    = {
+    brand: 'Brand (mono)',
+    'brand-depth': 'Brand depth',
+    emotion: 'Emotion',
+    categorical: 'Categorical',
+    duotone: 'Duotone',
+    spectrum: 'Spectrum',
+  };
+  const EMOTION_COLORS = ['#BF4040', '#D99E26', '#80BF40', '#40BFAA', '#406ABF', '#9540BF'];
+  const OKABE_ITO      = ['#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7'];
   const THEME_LABELS      = { paper: 'Paper', whisp: 'Whisp' };
   const LD_LABELS         = { light: 'Light', dark: 'Dark' };
+
+  function lerpHex(a, b, t) {
+    const ar = parseInt(a.slice(1,3),16), ag = parseInt(a.slice(3,5),16), ab2 = parseInt(a.slice(5,7),16);
+    const br = parseInt(b.slice(1,3),16), bg = parseInt(b.slice(3,5),16), bb = parseInt(b.slice(5,7),16);
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const v = Math.round(ab2 + (bb - ab2) * t);
+    return `rgb(${r}, ${g}, ${v})`;
+  }
+  function clamp(x, a, b) { return x < a ? a : (x > b ? b : x); }
 
   let elapsed = 0;
   let lastFrame = performance.now();
@@ -736,7 +781,48 @@
     const base = state.fill / 100;
     const amp  = state.amp / 100;
     const fill = base + amp * m;
-    return fill < 0 ? 0 : (fill > 1 ? 1 : fill);
+    return { fill: fill < 0 ? 0 : (fill > 1 ? 1 : fill), m };
+  }
+
+  function computeColor(col, row, n, t, fillPct, m, fallback) {
+    switch (state.palette) {
+      case 'brand':
+        return fallback;
+
+      case 'brand-depth': {
+        // Brand HSL ~ hsl(230, 100%, 40%) light, ~hsl(230, 100%, 60%) dark
+        const baseLight = state.ld === 'dark' ? 60 : 40;
+        const light = clamp(baseLight + m * 22, 12, 82);
+        return `hsl(230, 100%, ${light}%)`;
+      }
+
+      case 'emotion': {
+        const phase = (t * 0.5 + (col + row) / Math.max(2, n * 2));
+        const wrapped = ((phase % 1) + 1) % 1;
+        const idx = Math.floor(wrapped * EMOTION_COLORS.length) % EMOTION_COLORS.length;
+        return EMOTION_COLORS[idx];
+      }
+
+      case 'categorical': {
+        const offset = Math.floor(t * 0.5);
+        const idx = (((col + row) + offset) % OKABE_ITO.length + OKABE_ITO.length) % OKABE_ITO.length;
+        return OKABE_ITO[idx];
+      }
+
+      case 'duotone': {
+        const a = fallback;
+        const b = state.ld === 'dark' ? '#F9F4EB' : '#120F08';
+        const k = (m + 1) / 2;
+        return lerpHex(a, b, k);
+      }
+
+      case 'spectrum': {
+        const hue = ((t * 60 + (col + row) * (360 / Math.max(2, n * 2))) % 360 + 360) % 360;
+        const light = state.ld === 'dark' ? 58 : 48;
+        return `hsl(${hue.toFixed(1)}, 65%, ${light}%)`;
+      }
+    }
+    return fallback;
   }
 
   function getDirection(col, row, t) {
@@ -801,30 +887,57 @@
       ctx.restore();
     }
 
-    ctx.fillStyle = tileColor;
     const t = elapsed;
+    const palettized = state.palette !== 'brand';
+    if (!palettized) ctx.fillStyle = tileColor;
+
     for (let row = 0; row < n; row++) {
       for (let col = 0; col < n; col++) {
-        const fillPct = computeFill(col, row, n, t);
+        const { fill: fillPct, m } = computeFill(col, row, n, t);
         if (fillPct <= 0.0005) continue;
+
+        if (palettized) {
+          ctx.fillStyle = computeColor(col, row, n, t, fillPct, m, tileColor);
+        }
+
         const dir = getDirection(col, row, t);
         const align = getAlignment(col, row, t);
         const x0 = gx + col * tile;
         const y0 = gy + row * tile;
 
-        let fx = x0, fy = y0, fw, fh;
-        if (dir === 'horizontal') {
-          fw = inner * fillPct;
-          fh = inner;
-          if (align === 'center')   fx = x0 + (inner - fw) / 2;
-          else if (align === 'end') fx = x0 + (inner - fw);
+        if (state.shape === 'circle') {
+          const dia = inner * fillPct;
+          const r = dia / 2;
+          let cxp, cyp;
+          if (dir === 'horizontal') {
+            cyp = y0 + inner / 2;
+            if (align === 'start')      cxp = x0 + r;
+            else if (align === 'end')   cxp = x0 + inner - r;
+            else                        cxp = x0 + inner / 2;
+          } else {
+            cxp = x0 + inner / 2;
+            if (align === 'start')      cyp = y0 + r;
+            else if (align === 'end')   cyp = y0 + inner - r;
+            else                        cyp = y0 + inner / 2;
+          }
+          ctx.beginPath();
+          ctx.arc(cxp, cyp, Math.max(0.5, r), 0, Math.PI * 2);
+          ctx.fill();
         } else {
-          fw = inner;
-          fh = inner * fillPct;
-          if (align === 'center')   fy = y0 + (inner - fh) / 2;
-          else if (align === 'end') fy = y0 + (inner - fh);
+          let fx = x0, fy = y0, fw, fh;
+          if (dir === 'horizontal') {
+            fw = inner * fillPct;
+            fh = inner;
+            if (align === 'center')   fx = x0 + (inner - fw) / 2;
+            else if (align === 'end') fx = x0 + (inner - fw);
+          } else {
+            fw = inner;
+            fh = inner * fillPct;
+            if (align === 'center')   fy = y0 + (inner - fh) / 2;
+            else if (align === 'end') fy = y0 + (inner - fh);
+          }
+          ctx.fillRect(Math.round(fx), Math.round(fy), Math.max(1, Math.round(fw)), Math.max(1, Math.round(fh)));
         }
-        ctx.fillRect(Math.round(fx), Math.round(fy), Math.max(1, Math.round(fw)), Math.max(1, Math.round(fh)));
       }
     }
   }
@@ -888,8 +1001,17 @@
   bindSegmented('directionMix', 'directionMix', MIX_LABELS);
   bindSegmented('alignment',    'alignment',    ALIGNMENT_LABELS);
   bindSegmented('alignmentMix', 'alignmentMix', MIX_LABELS);
+  bindSegmented('shape',        'shape',        SHAPE_LABELS);
   bindSegmented('theme',        'theme',        THEME_LABELS);
   bindSegmented('ld',           'ld',           LD_LABELS);
+
+  const paletteSel = document.getElementById('palette');
+  paletteSel.value = state.palette;
+  setReadout('palette', PALETTE_LABELS[state.palette]);
+  paletteSel.addEventListener('change', () => {
+    state.palette = paletteSel.value;
+    setReadout('palette', PALETTE_LABELS[state.palette]);
+  });
 
   bindToggle('showGrid',  'showGrid');
   bindToggle('showCells', 'showCells');
@@ -917,8 +1039,11 @@
     setSegmentedValue('directionMix', DEFAULTS.directionMix); setReadout('directionMix', MIX_LABELS[DEFAULTS.directionMix]);
     setSegmentedValue('alignment',    DEFAULTS.alignment);    setReadout('alignment',    ALIGNMENT_LABELS[DEFAULTS.alignment]);
     setSegmentedValue('alignmentMix', DEFAULTS.alignmentMix); setReadout('alignmentMix', MIX_LABELS[DEFAULTS.alignmentMix]);
+    setSegmentedValue('shape',        DEFAULTS.shape);        setReadout('shape',        SHAPE_LABELS[DEFAULTS.shape]);
     setSegmentedValue('theme',        DEFAULTS.theme);        setReadout('theme',        THEME_LABELS[DEFAULTS.theme]);
     setSegmentedValue('ld',           DEFAULTS.ld);           setReadout('ld',           LD_LABELS[DEFAULTS.ld]);
+
+    paletteSel.value = DEFAULTS.palette; setReadout('palette', PALETTE_LABELS[DEFAULTS.palette]);
 
     document.getElementById('showGrid').checked  = DEFAULTS.showGrid;
     document.getElementById('showCells').checked = DEFAULTS.showCells;

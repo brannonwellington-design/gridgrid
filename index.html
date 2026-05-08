@@ -527,6 +527,14 @@
           </div>
         </div>
 
+        <div class="group">
+          <div class="label-row"><span>Layout</span><span class="value" data-readout="layout">Uniform</span></div>
+          <div class="segmented" id="layout" role="radiogroup" aria-label="Layout">
+            <button type="button" data-value="uniform"  aria-pressed="true">Uniform</button>
+            <button type="button" data-value="quadtree" aria-pressed="false">Quadtree</button>
+          </div>
+        </div>
+
         <div class="section-label">Color</div>
 
         <div class="group">
@@ -648,6 +656,7 @@
     alignmentMix: 'uniform',
     shape: 'square',
     sizing: 'stretch',
+    layout: 'uniform',
     palette: 'brand',
     theme: 'paper',
     ld: 'light',
@@ -679,6 +688,7 @@
   const MIX_LABELS        = { uniform: 'Uniform', 'alt-row': 'Alt rows', 'alt-col': 'Alt cols', cycle: 'Cycle' };
   const SHAPE_LABELS      = { square: 'Square', circle: 'Circle' };
   const SIZING_LABELS     = { stretch: 'Stretch', scale: 'Scale' };
+  const LAYOUT_LABELS     = { uniform: 'Uniform', quadtree: 'Quadtree (morphing)' };
   const PALETTE_LABELS    = {
     brand: 'Brand (mono)',
     'brand-depth': 'Brand depth',
@@ -859,6 +869,103 @@
     return state.alignment;
   }
 
+  // Paint a single block with the active shape / sizing / direction / alignment / palette.
+  // The block is square; bx/by/bw/bh describe its inner pixel bounds (gap already removed).
+  function paintTile(bx, by, bw, bh, vCol, vRow, n, t, tileColor, palettized) {
+    const { fill: fillPct, m } = computeFill(vCol, vRow, n, t);
+    if (fillPct <= 0.0005) return;
+
+    if (palettized) {
+      ctx.fillStyle = computeColor(vCol, vRow, n, t, fillPct, m, tileColor);
+    }
+
+    const sampleCol = Math.round(vCol);
+    const sampleRow = Math.round(vRow);
+    const dir = getDirection(sampleCol, sampleRow, t);
+    const align = getAlignment(sampleCol, sampleRow, t);
+
+    const proportional = state.shape === 'circle' || state.sizing === 'scale';
+
+    if (proportional) {
+      const sizePx = Math.min(bw, bh) * fillPct;
+      const half = sizePx / 2;
+      let cxp, cyp;
+      if (dir === 'horizontal') {
+        cyp = by + bh / 2;
+        if (align === 'start')      cxp = bx + half;
+        else if (align === 'end')   cxp = bx + bw - half;
+        else                        cxp = bx + bw / 2;
+      } else {
+        cxp = bx + bw / 2;
+        if (align === 'start')      cyp = by + half;
+        else if (align === 'end')   cyp = by + bh - half;
+        else                        cyp = by + bh / 2;
+      }
+      if (state.shape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(cxp, cyp, Math.max(0.5, half), 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(
+          Math.round(cxp - half),
+          Math.round(cyp - half),
+          Math.max(1, Math.round(sizePx)),
+          Math.max(1, Math.round(sizePx))
+        );
+      }
+    } else {
+      let fx = bx, fy = by, fw, fh;
+      if (dir === 'horizontal') {
+        fw = bw * fillPct;
+        fh = bh;
+        if (align === 'center')   fx = bx + (bw - fw) / 2;
+        else if (align === 'end') fx = bx + (bw - fw);
+      } else {
+        fw = bw;
+        fh = bh * fillPct;
+        if (align === 'center')   fy = by + (bh - fh) / 2;
+        else if (align === 'end') fy = by + (bh - fh);
+      }
+      ctx.fillRect(Math.round(fx), Math.round(fy), Math.max(1, Math.round(fw)), Math.max(1, Math.round(fh)));
+    }
+  }
+
+  // Stable per-node 0..1 hash for quadtree morph phases.
+  function hash01(x, y, d) {
+    const s = Math.sin(x * 12.9898 + y * 78.233 + d * 37.719) * 43758.5453;
+    return s - Math.floor(s);
+  }
+
+  // Continuous split decision in [0,1] from a smooth oscillation per node.
+  // Bias decreases with depth so deeper splits are rarer; phases differ per node so splits stagger.
+  function splitFraction(cx, cy, depth, t) {
+    const seed = hash01(cx, cy, depth);
+    const period = 3 + depth * 1.5;
+    const osc = Math.sin(2 * Math.PI * (t / period + seed));
+    const bias = 0.45 - depth * 0.22;
+    const raw = osc + bias;
+    const w = 0.25;
+    return clamp(raw / (2 * w) + 0.5, 0, 1);
+  }
+
+  // Build leaves from a quadtree on the unit square. Snaps split decisions to a binary
+  // (>= 0.5) so the partition is a true tiling without overlaps. Recomputed each frame.
+  function buildQuadtree(maxDepth, t) {
+    const leaves = [];
+    function recurse(x0, y0, x1, y1, depth) {
+      if (depth >= maxDepth) { leaves.push({ x0, y0, x1, y1, depth }); return; }
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      const f = depth === 0 ? 1 : splitFraction(cx, cy, depth, t);
+      if (f < 0.5) { leaves.push({ x0, y0, x1, y1, depth }); return; }
+      recurse(x0, y0, cx, cy, depth + 1);
+      recurse(cx, y0, x1, cy, depth + 1);
+      recurse(x0, cy, cx, y1, depth + 1);
+      recurse(cx, cy, x1, y1, depth + 1);
+    }
+    recurse(0, 0, 1, 1, 0);
+    return leaves;
+  }
+
   function draw() {
     const W = 800, H = 800;
     const surface = getCss('--canvas-bg') || getCss('--surface-primary');
@@ -901,63 +1008,31 @@
     const palettized = state.palette !== 'brand';
     if (!palettized) ctx.fillStyle = tileColor;
 
-    for (let row = 0; row < n; row++) {
-      for (let col = 0; col < n; col++) {
-        const { fill: fillPct, m } = computeFill(col, row, n, t);
-        if (fillPct <= 0.0005) continue;
-
-        if (palettized) {
-          ctx.fillStyle = computeColor(col, row, n, t, fillPct, m, tileColor);
-        }
-
-        const dir = getDirection(col, row, t);
-        const align = getAlignment(col, row, t);
-        const x0 = gx + col * tile;
-        const y0 = gy + row * tile;
-
-        const proportional = state.shape === 'circle' || state.sizing === 'scale';
-
-        if (proportional) {
-          const sizePx = inner * fillPct;
-          const half = sizePx / 2;
-          let cxp, cyp;
-          if (dir === 'horizontal') {
-            cyp = y0 + inner / 2;
-            if (align === 'start')      cxp = x0 + half;
-            else if (align === 'end')   cxp = x0 + inner - half;
-            else                        cxp = x0 + inner / 2;
-          } else {
-            cxp = x0 + inner / 2;
-            if (align === 'start')      cyp = y0 + half;
-            else if (align === 'end')   cyp = y0 + inner - half;
-            else                        cyp = y0 + inner / 2;
-          }
-          if (state.shape === 'circle') {
-            ctx.beginPath();
-            ctx.arc(cxp, cyp, Math.max(0.5, half), 0, Math.PI * 2);
-            ctx.fill();
-          } else {
-            ctx.fillRect(
-              Math.round(cxp - half),
-              Math.round(cyp - half),
-              Math.max(1, Math.round(sizePx)),
-              Math.max(1, Math.round(sizePx))
-            );
-          }
-        } else {
-          let fx = x0, fy = y0, fw, fh;
-          if (dir === 'horizontal') {
-            fw = inner * fillPct;
-            fh = inner;
-            if (align === 'center')   fx = x0 + (inner - fw) / 2;
-            else if (align === 'end') fx = x0 + (inner - fw);
-          } else {
-            fw = inner;
-            fh = inner * fillPct;
-            if (align === 'center')   fy = y0 + (inner - fh) / 2;
-            else if (align === 'end') fy = y0 + (inner - fh);
-          }
-          ctx.fillRect(Math.round(fx), Math.round(fy), Math.max(1, Math.round(fw)), Math.max(1, Math.round(fh)));
+    if (state.layout === 'quadtree') {
+      const maxDepth = Math.max(1, Math.round(Math.log2(Math.max(2, n))));
+      const leaves = buildQuadtree(maxDepth, t);
+      for (const leaf of leaves) {
+        const blockX = gx + leaf.x0 * gw;
+        const blockY = gy + leaf.y0 * gh;
+        const blockW = (leaf.x1 - leaf.x0) * gw;
+        const blockH = (leaf.y1 - leaf.y0) * gh;
+        // Gap proportional to depth so big blocks have a slightly bigger inset.
+        const blockGap = Math.min(2, gap);
+        const bx = blockX + blockGap / 2;
+        const by = blockY + blockGap / 2;
+        const bw = Math.max(1, blockW - blockGap);
+        const bh = Math.max(1, blockH - blockGap);
+        // Sample the motion at the block's center, in the same (col,row) space as uniform.
+        const vCol = ((leaf.x0 + leaf.x1) / 2) * (n - 1);
+        const vRow = ((leaf.y0 + leaf.y1) / 2) * (n - 1);
+        paintTile(bx, by, bw, bh, vCol, vRow, n, t, tileColor, palettized);
+      }
+    } else {
+      for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+          const x0 = gx + col * tile;
+          const y0 = gy + row * tile;
+          paintTile(x0, y0, inner, inner, col, row, n, t, tileColor, palettized);
         }
       }
     }
@@ -1024,6 +1099,7 @@
   bindSegmented('alignmentMix', 'alignmentMix', MIX_LABELS);
   bindSegmented('shape',        'shape',        SHAPE_LABELS);
   bindSegmented('sizing',       'sizing',       SIZING_LABELS);
+  bindSegmented('layout',       'layout',       LAYOUT_LABELS);
   bindSegmented('theme',        'theme',        THEME_LABELS);
   bindSegmented('ld',           'ld',           LD_LABELS);
 
@@ -1063,6 +1139,7 @@
     setSegmentedValue('alignmentMix', DEFAULTS.alignmentMix); setReadout('alignmentMix', MIX_LABELS[DEFAULTS.alignmentMix]);
     setSegmentedValue('shape',        DEFAULTS.shape);        setReadout('shape',        SHAPE_LABELS[DEFAULTS.shape]);
     setSegmentedValue('sizing',       DEFAULTS.sizing);       setReadout('sizing',       SIZING_LABELS[DEFAULTS.sizing]);
+    setSegmentedValue('layout',       DEFAULTS.layout);       setReadout('layout',       LAYOUT_LABELS[DEFAULTS.layout]);
     setSegmentedValue('theme',        DEFAULTS.theme);        setReadout('theme',        THEME_LABELS[DEFAULTS.theme]);
     setSegmentedValue('ld',           DEFAULTS.ld);           setReadout('ld',           LD_LABELS[DEFAULTS.ld]);
 

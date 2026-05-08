@@ -519,6 +519,14 @@
           </div>
         </div>
 
+        <div class="group">
+          <div class="label-row"><span>Sizing</span><span class="value" data-readout="sizing">Stretch</span></div>
+          <div class="segmented" id="sizing" role="radiogroup" aria-label="Sizing mode">
+            <button type="button" data-value="stretch" aria-pressed="true">Stretch</button>
+            <button type="button" data-value="scale"   aria-pressed="false">Scale</button>
+          </div>
+        </div>
+
         <div class="section-label">Color</div>
 
         <div class="group">
@@ -639,6 +647,7 @@
     alignment: 'start',
     alignmentMix: 'uniform',
     shape: 'square',
+    sizing: 'stretch',
     palette: 'brand',
     theme: 'paper',
     ld: 'light',
@@ -669,6 +678,7 @@
   const ALIGNMENT_LABELS  = { start: 'Start', center: 'Center', end: 'End' };
   const MIX_LABELS        = { uniform: 'Uniform', 'alt-row': 'Alt rows', 'alt-col': 'Alt cols', cycle: 'Cycle' };
   const SHAPE_LABELS      = { square: 'Square', circle: 'Circle' };
+  const SIZING_LABELS     = { stretch: 'Stretch', scale: 'Scale' };
   const PALETTE_LABELS    = {
     brand: 'Brand (mono)',
     'brand-depth': 'Brand depth',
@@ -905,24 +915,35 @@
         const x0 = gx + col * tile;
         const y0 = gy + row * tile;
 
-        if (state.shape === 'circle') {
-          const dia = inner * fillPct;
-          const r = dia / 2;
+        const proportional = state.shape === 'circle' || state.sizing === 'scale';
+
+        if (proportional) {
+          const sizePx = inner * fillPct;
+          const half = sizePx / 2;
           let cxp, cyp;
           if (dir === 'horizontal') {
             cyp = y0 + inner / 2;
-            if (align === 'start')      cxp = x0 + r;
-            else if (align === 'end')   cxp = x0 + inner - r;
+            if (align === 'start')      cxp = x0 + half;
+            else if (align === 'end')   cxp = x0 + inner - half;
             else                        cxp = x0 + inner / 2;
           } else {
             cxp = x0 + inner / 2;
-            if (align === 'start')      cyp = y0 + r;
-            else if (align === 'end')   cyp = y0 + inner - r;
+            if (align === 'start')      cyp = y0 + half;
+            else if (align === 'end')   cyp = y0 + inner - half;
             else                        cyp = y0 + inner / 2;
           }
-          ctx.beginPath();
-          ctx.arc(cxp, cyp, Math.max(0.5, r), 0, Math.PI * 2);
-          ctx.fill();
+          if (state.shape === 'circle') {
+            ctx.beginPath();
+            ctx.arc(cxp, cyp, Math.max(0.5, half), 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillRect(
+              Math.round(cxp - half),
+              Math.round(cyp - half),
+              Math.max(1, Math.round(sizePx)),
+              Math.max(1, Math.round(sizePx))
+            );
+          }
         } else {
           let fx = x0, fy = y0, fw, fh;
           if (dir === 'horizontal') {
@@ -1002,6 +1023,7 @@
   bindSegmented('alignment',    'alignment',    ALIGNMENT_LABELS);
   bindSegmented('alignmentMix', 'alignmentMix', MIX_LABELS);
   bindSegmented('shape',        'shape',        SHAPE_LABELS);
+  bindSegmented('sizing',       'sizing',       SIZING_LABELS);
   bindSegmented('theme',        'theme',        THEME_LABELS);
   bindSegmented('ld',           'ld',           LD_LABELS);
 
@@ -1040,6 +1062,7 @@
     setSegmentedValue('alignment',    DEFAULTS.alignment);    setReadout('alignment',    ALIGNMENT_LABELS[DEFAULTS.alignment]);
     setSegmentedValue('alignmentMix', DEFAULTS.alignmentMix); setReadout('alignmentMix', MIX_LABELS[DEFAULTS.alignmentMix]);
     setSegmentedValue('shape',        DEFAULTS.shape);        setReadout('shape',        SHAPE_LABELS[DEFAULTS.shape]);
+    setSegmentedValue('sizing',       DEFAULTS.sizing);       setReadout('sizing',       SIZING_LABELS[DEFAULTS.sizing]);
     setSegmentedValue('theme',        DEFAULTS.theme);        setReadout('theme',        THEME_LABELS[DEFAULTS.theme]);
     setSegmentedValue('ld',           DEFAULTS.ld);           setReadout('ld',           LD_LABELS[DEFAULTS.ld]);
 
